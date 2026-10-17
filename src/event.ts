@@ -4,8 +4,11 @@ import type { CalendarEvent } from "./types";
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 const DEFAULT_DURATION_MS = 2 * 60 * 60 * 1000;
+const MAX_TEXT = 10000;
 const MAX_TITLE = 200;
 const MAX_DESCRIPTION = 1200;
+const MAX_DESCRIPTION_RAW = 4000;
+const MAX_LOCATION = 300;
 
 function asText(value: unknown): string | undefined {
   if (Array.isArray(value)) {
@@ -16,7 +19,7 @@ function asText(value: unknown): string | undefined {
     return undefined;
   }
   if (typeof value === "string") {
-    const text = collapse(value);
+    const text = collapse(value.length > MAX_TEXT ? value.slice(0, MAX_TEXT) : value);
     return text || undefined;
   }
   if (typeof value === "number") return String(value);
@@ -91,15 +94,15 @@ function resolveUrl(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   try {
     const url = new URL(value, window.location.href);
-    return url.protocol === "http:" || url.protocol === "https:" ? url.href : undefined;
+    return url.protocol === "https:" ? url.href : undefined;
   } catch {
     return undefined;
   }
 }
 
 function pageUrl(): string {
-  const { origin, pathname, search } = window.location;
-  return `${origin}${pathname}${search}`;
+  const { origin, pathname } = window.location;
+  return `${origin}${pathname}`;
 }
 
 export function toCalendarEvent(node: JsonLdNode): CalendarEvent | null {
@@ -118,11 +121,11 @@ export function toCalendarEvent(node: JsonLdNode): CalendarEvent | null {
   };
 
   const location = placeToString(node.location);
-  if (location) event.location = location;
+  if (location) event.location = truncate(location, MAX_LOCATION);
 
   const description = asText(node.description);
   if (description) {
-    const details = plainText(description);
+    const details = plainText(truncate(description, MAX_DESCRIPTION_RAW));
     if (details) event.description = truncate(details, MAX_DESCRIPTION);
   }
 

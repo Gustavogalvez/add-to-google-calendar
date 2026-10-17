@@ -133,6 +133,12 @@ export class EventWidget {
     this.renderContent();
   }
 
+  ensureMounted(): void {
+    if (this.events.length === 0 || (this.host?.isConnected && this.wrap)) return;
+    this.ensureHost();
+    this.renderContent();
+  }
+
   contains(node: Node): boolean {
     return Boolean(this.host && (node === this.host || this.host.contains(node)));
   }
@@ -159,7 +165,7 @@ export class EventWidget {
     if (this.host?.isConnected && this.wrap) return;
     const host = document.createElement("div");
     host.id = HOST_ID;
-    const shadow = host.attachShadow({ mode: "open" });
+    const shadow = host.attachShadow({ mode: "closed" });
     const style = document.createElement("style");
     style.textContent = STYLE;
     const wrap = document.createElement("div");

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Add to Google Calendar
 // @namespace    https://github.com/Gustavogalvez/add-to-google-calendar
-// @version      0.1.0
+// @version      0.1.1
 // @author       Gustavo Galvez (Gustavogalvez)
 // @description  Detects events (JSON-LD) on ticket and event pages and adds a button to send them to Google Calendar.
 // @license      MIT
@@ -24,8 +24,11 @@
 	}
 	var DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 	var DEFAULT_DURATION_MS = 72e5;
+	var MAX_TEXT = 1e4;
 	var MAX_TITLE = 200;
 	var MAX_DESCRIPTION = 1200;
+	var MAX_DESCRIPTION_RAW = 4e3;
+	var MAX_LOCATION = 300;
 	function asText(value) {
 		if (Array.isArray(value)) {
 			for (const entry of value) {
@@ -34,7 +37,7 @@
 			}
 			return;
 		}
-		if (typeof value === "string") return collapse(value) || void 0;
+		if (typeof value === "string") return collapse(value.length > MAX_TEXT ? value.slice(0, MAX_TEXT) : value) || void 0;
 		if (typeof value === "number") return String(value);
 		if (typeof value === "object" && value !== null) return asText(value["@value"]);
 	}
@@ -101,14 +104,14 @@
 		if (typeof value !== "string") return void 0;
 		try {
 			const url = new URL(value, window.location.href);
-			return url.protocol === "http:" || url.protocol === "https:" ? url.href : void 0;
+			return url.protocol === "https:" ? url.href : void 0;
 		} catch {
 			return;
 		}
 	}
 	function pageUrl() {
-		const { origin, pathname, search } = window.location;
-		return `${origin}${pathname}${search}`;
+		const { origin, pathname } = window.location;
+		return `${origin}${pathname}`;
 	}
 	function toCalendarEvent(node) {
 		const title = asText(node.name);
@@ -124,10 +127,10 @@
 			url: resolveUrl(node.url) ?? pageUrl()
 		};
 		const location = placeToString(node.location);
-		if (location) event.location = location;
+		if (location) event.location = truncate(location, MAX_LOCATION);
 		const description = asText(node.description);
 		if (description) {
-			const details = plainText(description);
+			const details = plainText(truncate(description, MAX_DESCRIPTION_RAW));
 			if (details) event.description = truncate(details, MAX_DESCRIPTION);
 		}
 		return event;
@@ -140,6 +143,7 @@
 		"subEvent",
 		"events"
 	];
+	var MAX_RAW_LENGTH = 262144;
 	function isNode(value) {
 		return typeof value === "object" && value !== null && !Array.isArray(value);
 	}
@@ -147,7 +151,7 @@
 		const nodes = [];
 		for (const script of root.querySelectorAll("script[type=\"application/ld+json\"]")) {
 			const raw = script.textContent?.trim();
-			if (!raw) continue;
+			if (!raw || raw.length > MAX_RAW_LENGTH) continue;
 			try {
 				walk(JSON.parse(raw), nodes);
 			} catch {
@@ -163,7 +167,7 @@
 		}
 		if (!isNode(value)) return;
 		out.push(value);
-		for (const key of NESTED_KEYS) if (key in value) walk(value[key], out);
+		for (const key of NESTED_KEYS) if (Object.hasOwn(value, key)) walk(value[key], out);
 	}
 	function isEventNode(node) {
 		const raw = node["@type"];
@@ -339,6 +343,11 @@
 			this.panelOpen = false;
 			this.renderContent();
 		}
+		ensureMounted() {
+			if (this.events.length === 0 || this.host?.isConnected && this.wrap) return;
+			this.ensureHost();
+			this.renderContent();
+		}
 		contains(node) {
 			return Boolean(this.host && (node === this.host || this.host.contains(node)));
 		}
@@ -361,7 +370,7 @@
 			if (this.host?.isConnected && this.wrap) return;
 			const host = document.createElement("div");
 			host.id = HOST_ID;
-			const shadow = host.attachShadow({ mode: "open" });
+			const shadow = host.attachShadow({ mode: "closed" });
 			const style = document.createElement("style");
 			style.textContent = STYLE;
 			const wrap = document.createElement("div");
@@ -467,7 +476,10 @@
 	function refresh() {
 		const events = detectEvents();
 		const next = signatureOf(events);
-		if (next === signature) return;
+		if (next === signature) {
+			widget.ensureMounted();
+			return;
+		}
 		signature = next;
 		widget.render(events);
 	}

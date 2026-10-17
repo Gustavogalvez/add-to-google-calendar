@@ -11,7 +11,7 @@ export default defineConfig({
       userscript: {
         name: "Add to Google Calendar",
         namespace: REPO,
-        version: "0.1.0",
+        version: "0.1.1",
         description: "Detects events (JSON-LD) on ticket and event pages and adds a button to send them to Google Calendar.",
         author: "Gustavo Galvez (Gustavogalvez)",
         license: "MIT",

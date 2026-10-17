@@ -15,7 +15,10 @@ function signatureOf(events: CalendarEvent[]): string {
 function refresh(): void {
   const events = detectEvents();
   const next = signatureOf(events);
-  if (next === signature) return;
+  if (next === signature) {
+    widget.ensureMounted();
+    return;
+  }
   signature = next;
   widget.render(events);
 }
